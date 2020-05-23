@@ -1,0 +1,210 @@
+ 
+<h1>Select Seat</h1>
+<canvas id="seatplan" width="1200" height="400"></canvas>
+
+<canvas id="screen" width="1200" height="100"></canvas>
+<button id="book" class = "btn btn-lg btn-block btn-primary">Book Ticket</button>
+
+
+
+  <script>
+
+
+var canvas = document.getElementById('seatplan');
+var context = canvas.getContext('2d');
+var book = document.getElementById('book');
+
+$(document).ready(function(){
+	renderSeatplan(getSeatInfo(10,25))
+});
+
+$("#book").click(function() {
+	if(selected_area.length > 0)
+	{
+		$.ajax({
+         type: 'POST',
+         url: '/seat/book_seat',
+         data :{selected_area:selected_area},
+         dataType: 'json',
+         success: function(data)
+         {
+          alert("Ticket is successfully booked")
+          if(data.msg == "Success")
+          {
+          	window.location = "/"
+          }
+         }});	
+	}
+	else
+	{
+		alert("Please select a seat");
+	}
+	
+
+});
+canvas.addEventListener('click', (e) => {
+    var rect = canvas.getBoundingClientRect(),
+	x = e.clientX - rect.left,
+	y = e.clientY - rect.top,
+	i = 0, rectangle;
+    seat_occ = "";
+    if(seat_filled!="")
+    {
+        seat_occ = seat_filled.split(",");
+    }
+	while(rectangle = global[i++]) {
+	context.beginPath();
+	context.rect(rectangle.x,rectangle.y,rectangle.m,rectangle.n);
+
+	if (context.isPointInPath(x, y)) {
+        if(!seat_occ.includes(rectangle.id.replace(",","-")))
+        {
+            context.fillStyle = "yellow"
+            context.fill();
+            selected_area.push(rectangle.id);
+            break;
+        }
+        else
+        {
+            alert("This seat is already booked")
+        }
+		
+	}
+}
+});
+            var EMPTY = 0; // Still available for reservation and purchase.
+            var BOUGHT = 2; // bought and paid for.
+            var global = [];
+            var selected_area = [];
+            var seat_filled = "<%= @seat_booked %>"
+            var movie_screen = document.getElementById('screen');
+			var c = movie_screen.getContext('2d');
+    
+		    c.fillStyle = "white";
+		    c.fillRect(0,0, 1000, 50);
+		    c.fillStyle = "gray";
+		    c.font = "20pt sans-serif";
+		    c.fillText("Screen this way", screen.width/2, 50);
+
+            function Point(x,y) {
+                return { X: x, Y: y }
+            }
+            function Size(w,h) {
+                return {Width: w, Height: h}
+            }
+            function Rectangle(left,top,width,height) {
+                return {TopLeft: Point(left,top), Size: Size(width,height)}
+            }
+            function seatColorFromSeatStatus(seatStatus) {
+                switch(seatStatus) {
+                    case EMPTY: return "white";
+                    case BOUGHT: return "red";
+                    default: return "black"; // Invalid value...
+                }
+            }
+            function mapSeatStatusToSeatColor(seats)
+            {
+                var result = {};
+                for(seat in seats) {
+                    result[seat] = seatColorFromSeatStatus(seats[seat])
+                }
+                return result;
+            }
+            function seatKeyFromPosition(row,col) {
+                return JSON.stringify([row,col]);
+            }
+            function seatRowFromKey(key) {
+                return (JSON.parse(key))[0];
+            }
+            function seatColFromKey(key) {
+                return (JSON.parse(key)[1]);
+            }
+            function getSeatInfo(nrows,ncolumns) {
+                var result = { NRows: nrows, NColumns: ncolumns, Seats : {} };
+                for(row = 0; row < nrows; row++) {
+                    for( col = 0; col < ncolumns; col++ ) {
+                        result.Seats[seatKeyFromPosition(row,col)] = EMPTY;
+                    }
+                }
+                if(seat_filled != "")
+                {
+                	seat_number = seat_filled.split(",")
+                	for(var i=0; i< seat_number.length ; i++){
+                		result.Seats[seatKeyFromPosition(parseInt(seat_number[i].split("-")[0]), parseInt(seat_number[i].split("-")[1]))] = BOUGHT;
+                	}              
+                }
+                
+                console.log(result)
+                return result;
+            }
+            function renderSeat(ctx,r,fillColor, row, col) {
+                var backup = ctx.fillStyle;
+                ctx.strokeStyle = "blue";
+                ctx.rect(r.TopLeft.X+2,r.TopLeft.Y+2,r.Size.Width-4,r.Size.Height-4);
+                ctx.stroke();
+                ctx.fillStyle = fillColor;
+                ctx.fillRect(r.TopLeft.X+3,r.TopLeft.Y+3,r.Size.Width-5,r.Size.Height-5);
+                ctx.fillStyle = backup;
+                global.push({
+			            id: row + "," + col, 
+			            x: r.TopLeft.X+2,
+			            y: r.TopLeft.Y+2,
+			  			m: r.Size.Width-4,
+			  			n: r.Size.Height-5
+			        });
+
+
+            }
+            function renderSeatplan(seatInfo) {
+                var nrows = seatInfo.NRows;
+                var ncolumns = seatInfo.NColumns;
+                var seatColors = mapSeatStatusToSeatColor(seatInfo.Seats)
+                var canvas = document.getElementById("seatplan");
+                var ctx = canvas.getContext("2d");
+
+                var borderWidth = 10;
+                var rcContent = Rectangle(
+                    borderWidth
+                    , borderWidth
+                    , canvas.width - 2 * borderWidth
+                    , canvas.height - 2 * borderWidth
+                );
+                var szCell = Size(
+                    Math.floor(rcContent.Size.Width / (ncolumns + 1))
+                    , Math.floor(rcContent.Size.Height / (nrows + 1))
+                );
+                ctx.font = "30px Arial";
+
+                for(row = -1; row < nrows; row++) {
+                    for(col = -1; col < ncolumns; col++ ) {
+                        var r = Rectangle(
+                            rcContent.TopLeft.X + szCell.Width * (col+1)
+                            ,rcContent.TopLeft.Y + szCell.Height * (row+1)
+                            ,szCell.Width
+                            ,szCell.Height
+                            );
+                        var center = Point(szCell.Width / 2, szCell.Height / 2);
+                        if (row == -1 && col == -1) {
+                            // nothing to render.
+                        }
+                        else if(row == -1){
+                            // render column headers as numbers...
+                            ctx.fillStyle = "black";
+                            ctx.textAlign = "center";
+                            ctx.fillText(col.toString(),r.TopLeft.X+center.X,r.TopLeft.Y+center.Y+6);
+                        }
+                        else if(col == -1){
+                            // render row header
+                            ctx.fillStyle = "black";
+                            ctx.textAlign = "center";
+                            ctx.fillText(String.fromCharCode(65 + row),r.TopLeft.X+center.X+4,r.TopLeft.Y+center.Y+6);
+                        }
+                        else
+                        {
+                            // render seat
+                            renderSeat(ctx,r,seatColors[seatKeyFromPosition(row,col)],row,col);
+                        }
+                    }
+                }
+            }
+        </script>
